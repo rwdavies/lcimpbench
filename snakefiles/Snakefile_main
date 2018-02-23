@@ -1,0 +1,133 @@
+## TODO figure out better way to inject
+include:
+    "Snakefile_environment"
+
+SUMMARY_TXT = LCIMPBENCH_HOME_DIR + '/summary.txt'
+BEAGLE_REFORMAT_SCRIPT = LCIMPBENCH_HOME_DIR + '/scripts/make_vcf_acceptable_for_beagle.sh'
+COMPARE_SCRIPT = LCIMPBENCH_HOME_DIR + '/R/compare_vcfs.R'
+SUMMARIZE_SCRIPT = LCIMPBENCH_HOME_DIR + '/R/summarize.R'
+BCFTOOLS_VERSION = '1.5'
+BCFTOOLS_DOWNLOAD_LINK = 'https://github.com/samtools/bcftools/releases/download/' + BCFTOOLS_VERSION + '/bcftools-' + BCFTOOLS_VERSION + '.tar.bz2'
+SAMTOOLS_VERSION = '1.6'
+SAMTOOLS_DOWNLOAD_LINK = 'https://github.com/samtools/samtools/releases/download/' + SAMTOOLS_VERSION + '/samtools-' + SAMTOOLS_VERSION + '.tar.bz2'
+HTSLIB_VERSION = '1.6'
+HTSLIB_DOWNLOAD_LINK = 'https://github.com/samtools/htslib/releases/download/' + HTSLIB_VERSION + '/htslib-' + HTSLIB_VERSION + '.tar.bz2'
+REF_PANEL_DOWNLOAD_LINK = 'http://bochet.gcc.biostat.washington.edu/beagle/1000_Genomes_phase3_v5a/individual_chromosomes/'
+REF_PANEL_SAMPLE_LIST = 'http://www.well.ox.ac.uk/~rwdavies/ancillary/1000GP_Phase3.sample'
+REF_FA_DOWNLOAD_LINK = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz'
+PICARD_DOWNLOAD_LINK = 'https://github.com/broadinstitute/picard/releases/download/2.9.0/picard.jar'
+BWA_DOWNLOAD_LINK = 'https://github.com/lh3/bwa.git'
+
+#GATK_VERSION = '4.0.1.2'
+#GATK_DOWNLOAD_LINK = 'https://github.com/broadinstitute/gatk/releases/download/' + GATK_VERSION + '/gatk-' + GATK_VERSION + '.zip'
+
+
+## TODO abstract into dict, iterate
+## possibly even better abstraction into scenarios
+SAMPLE_LIST = 'HGDP00775'
+## THIS IS RUNNING INTO PROBLEMS ON EBI
+## HOST LOCAL COPY FOR NOW
+SAMPLE_DOWNLOAD_BAM = 'ftp://ftp.sra.ebi.ac.uk/vol1/ERZ312/ERZ312793/LP6005441-DNA_D05.srt.aln.bam'
+
+
+COVS = ['0.1', '0.2', '0.3', '0.4', '0.5']
+REFS = ['AFR', 'AMR', 'EAS', 'EUR', 'SAS', 'ALL']
+CHR = '20'
+REGION_START = '1000000'
+REGION_END = '1100000'
+REGION_LENGTH = '100000'
+REGION = CHR + '.' + REGION_START + '.' + REGION_END
+REGION_COLON = CHR + ':' + REGION_START + '-' + REGION_END
+
+
+include:
+    "Snakefile_install"
+
+include:
+    "Snakefile_reference_panels"
+
+include:
+    "Snakefile_make_genos"
+
+rule all:
+    input:
+        SUMMARY_TXT
+
+rule install:
+    input:
+        [BCFTOOLS, SAMTOOLS, TABIX, BGZIP]
+
+rule install_all:
+    input:
+        [BCFTOOLS, SAMTOOLS, TABIX, BGZIP, BEAGLE, GATK, BWA, PICARD]
+
+rule refs:
+    input:
+        expand('downloads/chr{chr}.1kg.phase3.v5a.{region}.{ref}.vcf.gz', chr = CHR, region = REGION, ref = REFS)
+
+rule download_bam:
+    input:
+        'bams/' + SAMPLE_LIST + '.' + REGION + '.bam'
+
+rule genos:
+    input:
+        expand('results/gen.{cov}X.{region}.vcf.gz', cov = COVS, region = REGION),
+        expand('results/gen.{region}.vcf.gz', region = REGION)
+
+rule impute:
+    input:
+        expand('results/beagle.{ref}.{cov}X.{region}.vcf.gz', region = REGION, ref = REFS, cov = COVS)
+	
+
+
+## TODO abstract running of tool properly
+## TODO abstract out comparison to separate script
+## TODO consider timing conversion between formats
+rule impute_beagle:
+    input:
+        vcf = expand('results/gen.{{COV}}X.{region}.vcf.gz', region = REGION),
+        ref = expand('downloads/chr{chr}.1kg.phase3.v5a.{region}.{{REF}}.biSNPsonly.vcf.gz', region = REGION, chr = CHR),
+        beagle = BEAGLE,
+        truth = expand('results/gen.{region}.vcf.gz', region = REGION),
+	tabix = TABIX,
+	bcftools = BCFTOOLS
+    output:
+        vcf = expand('results/beagle.{{REF}}.{{COV}}X.{region}.vcf.gz', region = REGION),
+        summary = expand('results/beagle.{{REF}}.{{COV}}X.{region}.summary', region = REGION)
+    params: 
+        N='BE_{REF}_{COV}', 
+        threads=1
+    wildcard_constraints:
+        COV='\d.\d',
+        REF='\D\D\D',
+        REGION='\d{1,2}.\d{1,9}.\d{1,9}'
+    shell:
+        'mkdir -p results && '
+        'export INPUT_REFORMATED={input.vcf}.{wildcards.REF}.vcf && '
+        'bash {BEAGLE_REFORMAT_SCRIPT} {input.vcf} ${{INPUT_REFORMATED}} {input.bcftools} && '
+        '/usr/bin/time -v '	
+        'java -Xmx6G -jar {input.beagle} '
+	'ref={input.ref} gl=${{INPUT_REFORMATED}} out={output.vcf} nthreads={params.threads} &> {output.vcf}.log && '
+	'mv {output.vcf}.vcf.gz {output.vcf} && '
+        '{input.tabix} {output.vcf} && '
+        'rm ${{INPUT_REFORMATED}} && '
+        '{R} -f {COMPARE_SCRIPT} --args {input.truth} {output.vcf} {output.vcf}.log {output.summary} &> {output.summary}.log '
+
+
+## do Python stuff here
+COVS_FOR_SUMMARY='-'.join(COVS)
+REFS_FOR_SUMMARY='-'.join(REFS)
+
+## TODO abstract summarization
+rule summarize:
+    input:
+        summary = expand('results/beagle.{ref}.{cov}X.{region}.summary', ref = REFS, cov = COVS, region = REGION)
+    output:
+        summary = SUMMARY_TXT
+    params: 
+        N='summarize', 
+        threads=1
+    shell:
+        '{R} -f {SUMMARIZE_SCRIPT} --args '
+        '{COVS_FOR_SUMMARY} {REFS_FOR_SUMMARY} '
+        '{REGION} {output.summary} '
