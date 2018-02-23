@@ -1,0 +1,134 @@
+#NEXT_CHR = '21' ## see reference downloading hack
+#REF_FA = 'downloads/hs37d5.' + CHR + '.fa'
+#REF_STEM = 'downloads/hs37d5.' + CHR
+#        'START=`grep -n ">{CHROM}" downloads/hs37d5.fa` && '
+#        'END=$((`grep -n ">{NEXT_CHR}" downloads/hs37d5.fa - 1))` && '
+#        'awk '{{if(NR >= ${{START}} && NR <= ${{END}}'
+
+REF_FA = 'refs/hs37d5.fa'
+REF_STEM = 'refs/hs37d5'
+
+rule get_and_prepare_ref:
+    input:
+        BWA,
+        SAMTOOLS,
+        PICARD
+    output:
+        REF_FA,
+        REF_STEM + ".dict"
+    params: N='dwn_bams', threads=1
+    shell:
+        'cd refs && wget {REF_FA_DOWNLOAD_LINK}* && '
+        'gzip -df hs37d5.fa.gz && '
+        'mv hs37d5.fa.gz.fai hs37d5.fa.fai && '
+        'mv hs37d5.fa.gz.gzi hs37d5.fa.gzi && '
+        'cd ../ && '
+        'echo create picard sequence dictionary && '
+	'java -jar {PICARD} CreateSequenceDictionary R={REF_FA} O={REF_STEM}.dict'
+
+##        '{SAMTOOLS} faidx {REF_FA} && '
+##        '{BWA} index {REF_FA} && '
+
+
+rule download_bams:
+    input:
+        SAMTOOLS
+    output:
+        bam = 'bams/{SAMPLE_ID}.{REGION}.bam',
+        bai = 'bams/{SAMPLE_ID}.{REGION}.bam.bai'
+    params: 
+        N='dwn_bams', 
+        threads=1
+    wildcard_constraints:
+        REGION='\d{1,2}.\d{1,9}.\d{1,9}',
+        SAMPLE_ID='\w{1,10}'
+    shell:
+        '{SAMTOOLS} view -b {SAMPLE_DOWNLOAD_BAM} {REGION_COLON} > {output.bam} && '
+        '{SAMTOOLS} index {output.bam} '
+
+
+rule subsample_bams:
+    input:
+        bam = 'bams/{SAMPLE_ID}.{REGION}.bam',
+        bai = 'bams/{SAMPLE_ID}.{REGION}.bam.bai',
+        samtools = SAMTOOLS
+    output:
+        bam = 'bams/{SAMPLE_ID}.{COV}X.{REGION}.bam',
+        bai = 'bams/{SAMPLE_ID}.{COV}X.{REGION}.bam.bai'
+    params: 
+        N='subsample', 
+        threads=1
+    wildcard_constraints:
+        COV='\d.\d',
+        REGION='\d{1,2}.\d{1,9}.\d{1,9}',
+        SAMPLE_ID='\w{1,10}'
+    shell:
+        '(echo start && '
+        'totalbases=`{input.samtools} stats {input.bam} | grep "bases mapped (cigar):" | cut -f3` && '
+        'high_cov=`echo "${{totalbases}} / {REGION_LENGTH}" | bc -l` && '
+        'echo "observed coverage of ${{high_cov}} for {input.bam}" && '
+        'down=`echo hello | awk "{{print {wildcards.COV} / ${{high_cov}} }}"` && '
+        'echo "downsampling with ${{down}}" && '
+        'seed=`python -c "print(int(float(12345 * {wildcards.COV})))"` && '
+        'echo "down=${{down}}, seed=${{seed}}" && '
+        '{input.samtools} view -b -s ${{seed}}${{down}} {input.bam} {REGION_COLON} > {output.bam} && '
+        'sleep 3 && '
+        '{input.samtools} index {output.bam} && '
+        'echo done) &> {output.bam}.log'
+        ## unclear if sleep needed, get lots of errors about indexes being too new otherwise
+
+
+rule make_genotypes:
+    input:
+        gatk = {GATK},
+        ref_fa = {REF_FA},
+        sites = expand('downloads/chr{chr}.1kg.phase3.v5a.{{REGION}}.ALL.biSNPsonly.vcf.gz', chr = CHR),
+        bams = expand('bams/{sample_id}.{{COV}}X.{{REGION}}.bam', sample_id = SAMPLE_LIST),
+        bais = expand('bams/{sample_id}.{{COV}}X.{{REGION}}.bam.bai', sample_id = SAMPLE_LIST),
+        tabix = {TABIX},
+        ref_stem = REF_STEM + ".dict"
+    output:
+        vcf = 'results/gen.{COV}X.{REGION}.vcf.gz'
+    params: 
+        N='genoLC',
+        threads=1
+    wildcard_constraints:
+        COV='\d.\d',
+        REGION='\d{1,2}.\d{1,9}.\d{1,9}'
+    shell:
+        'bam_list=`echo {input.bams} | sed "s/ / -I /g"` && '
+        'java -Xmx4G -jar {input.gatk} '
+        '-R {REF_FA} -T UnifiedGenotyper '
+        '-I ${{bam_list}} -nt {params.threads} '
+        '--intervals {input.sites} '
+        '--alleles {input.sites} '
+        '--genotyping_mode GENOTYPE_GIVEN_ALLELES --output_mode EMIT_ALL_SITES '
+        '--out {output.vcf} &> {output.vcf}.log && {input.tabix} -f {output.vcf}'
+
+## TODO - abstract this into above
+## made from copying above, removing "cov"
+rule make_genotypes_high_cov:
+    input:
+        gatk = {GATK},
+        ref_fa = {REF_FA},
+        sites = expand('downloads/chr{chr}.1kg.phase3.v5a.{{REGION}}.ALL.biSNPsonly.vcf.gz', chr = CHR),
+        bams = expand('bams/{sample_id}.{{REGION}}.bam', sample_id = SAMPLE_LIST),
+        bais = expand('bams/{sample_id}.{{REGION}}.bam.bai', sample_id = SAMPLE_LIST),
+        tabix = {TABIX},
+        ref_stem = REF_STEM + ".dict"
+    output:
+        vcf = 'results/gen.{REGION}.vcf.gz'
+    params: 
+        N='genoHC',
+        threads=1
+    wildcard_constraints:
+        REGION='\d{1,2}.\d{1,9}.\d{1,9}'
+    shell:
+        'bam_list=`echo {input.bams} | sed "s/ / -I /g"` && '
+        'java -Xmx4G -jar {input.gatk} '
+        '-R {REF_FA} -T UnifiedGenotyper '
+        '-I ${{bam_list}} -nt {params.threads} '
+        '--intervals {input.sites} '
+        '--alleles {input.sites} '
+        '--genotyping_mode GENOTYPE_GIVEN_ALLELES --output_mode EMIT_ALL_SITES '
+        '--out {output.vcf} &> {output.vcf}.log && {input.tabix} -f {output.vcf}'

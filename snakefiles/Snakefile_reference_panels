@@ -1,0 +1,78 @@
+rule download_ref:
+    output:
+        vcf = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.vcf.gz',
+        tbi = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.vcf.gz.tbi'
+    params: N='download_ref', threads=1
+    shell:
+        'cd downloads && '
+        'wget {REF_PANEL_DOWNLOAD_LINK}/chr{CHR}.1kg.phase3.v5a.vcf.gz && '
+        'cp chr{CHR}.1kg.phase3.v5a.vcf.gz  chr{CHR}.1kg.phase3.v5a.ALL.vcf.gz && '
+        'wget {REF_PANEL_DOWNLOAD_LINK}/chr{CHR}.1kg.phase3.v5a.vcf.gz.tbi && '
+        'cp chr{CHR}.1kg.phase3.v5a.vcf.gz.tbi chr{CHR}.1kg.phase3.v5a.ALL.vcf.gz.tbi'
+
+
+## TODO make beagle downstream work with multi-allelic variants
+rule extract_biSNPs_from_ref:
+    input:
+        vcf = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.vcf.gz',	
+        tbi = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.vcf.gz.tbi',
+	bgzip = BGZIP,
+	tabix = TABIX
+    output:
+        vcf = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.biSNPsonly.vcf.gz',	
+        tbi = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.biSNPsonly.vcf.gz.tbi'
+    params: N='extract_biSNPs_from_ref', threads=1
+    shell:
+        'zcat {input.vcf} | '
+        'awk \'{{if(substr($1, 1, 1) == "#" || (length($4) == 1 && length($5) == 1) && ({REGION_START} <= $2 && $2 <= {REGION_END})) {{print $0}} }}\' - | {input.bgzip} -c > {output.vcf} && {input.tabix} {output.vcf} '
+
+
+rule extract_region:
+    input:
+        vcf = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.biSNPsonly.vcf.gz',
+        tbi = 'downloads/chr{CHR}.1kg.phase3.v5a.ALL.biSNPsonly.vcf.gz.tbi',
+        bcftools = BCFTOOLS,
+        bgzip = BGZIP,
+        tabix = TABIX
+    output:
+        vcf = 'downloads/chr{CHR}.1kg.phase3.v5a.{REGION}.ALL.biSNPsonly.vcf.gz',
+        tbi = 'downloads/chr{CHR}.1kg.phase3.v5a.{REGION}.ALL.biSNPsonly.vcf.gz.tbi'
+    shell:
+        '{BCFTOOLS} view {input.vcf} {REGION_COLON} | {BGZIP} -c > {output.vcf} && {TABIX} {output.vcf} '
+
+
+rule download_1000G_sample:
+    output:
+        'downloads/1000GP_Phase3.sample'
+    params: N='download_1000G_sample', threads=1
+    shell:
+        'cd downloads && '
+        'wget {REF_PANEL_SAMPLE_LIST}'
+
+rule extract_ref_group:
+    input:
+        file = 'downloads/1000GP_Phase3.sample'
+    output:
+        file = 'downloads/1000GP_Phase3.{REF}.samplelist'
+    wildcard_constraints:
+        REF='\D\D\D'
+    shell:
+        'grep {wildcards.REF} {input.file} | cut -f1 --delimiter=" " > {output.file}'
+
+
+rule extract_ref:
+    input:
+        vcf = expand('downloads/chr{chr}.1kg.phase3.v5a.{region}.ALL.biSNPsonly.vcf.gz', chr = CHR, region = REGION),
+        tbi = expand('downloads/chr{chr}.1kg.phase3.v5a.{region}.ALL.biSNPsonly.vcf.gz.tbi', chr = CHR, region = REGION),
+        samplelist = 'downloads/1000GP_Phase3.{REF}.samplelist',
+        bgzip = BGZIP,
+        bcftools = BCFTOOLS,
+        tabix = TABIX
+    wildcard_constraints:
+        REF='\D\D\D'
+    output:
+        vcf = expand('downloads/chr{chr}.1kg.phase3.v5a.{region}.{{REF}}.biSNPsonly.vcf.gz', chr = CHR, region = REGION)
+    params: N='extract_ref', threads=1
+    shell:
+        '{input.bcftools} view --samples-file {input.samplelist} {input.vcf} | '
+        ' {input.bgzip} -c > {output.vcf} && {input.tabix} {output.vcf}'

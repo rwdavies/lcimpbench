@@ -1,0 +1,75 @@
+## TODO abstract installation of tool
+## also include version information
+BEAGLE = "downloads/beagle.21Jan17.6cc.jar"
+
+rule install_beagle:
+    output:
+        BEAGLE
+    params: N='install_beagle', threads=1
+    shell:
+        'mkdir -p downloads && cd downloads && wget https://faculty.washington.edu/browning/beagle/beagle.21Jan17.6cc.jar'
+
+
+BCFTOOLS = 'downloads/bcftools-' + BCFTOOLS_VERSION + '/bcftools'
+rule install_bcftools:
+    output:
+        BCFTOOLS
+    params: N='install_bcftools', threads=1
+    shell:
+        'mkdir -p downloads && cd downloads && wget {BCFTOOLS_DOWNLOAD_LINK} && '
+        'bzip2 -f -d bcftools-{BCFTOOLS_VERSION}.tar.bz2 && '
+        'tar -xvf bcftools-{BCFTOOLS_VERSION}.tar && '
+        'cd bcftools-{BCFTOOLS_VERSION} && ./configure --disable-lzma && make'
+
+SAMTOOLS = 'downloads/samtools-' + SAMTOOLS_VERSION + '/samtools'
+rule install_samtools:
+    output:
+        SAMTOOLS
+    params: N='install_samtools', threads=1
+    shell:
+        'mkdir -p downloads && cd downloads && wget {SAMTOOLS_DOWNLOAD_LINK} && '
+        'bzip2 -f -d samtools-{SAMTOOLS_VERSION}.tar.bz2 && '
+        'tar -xvf samtools-{SAMTOOLS_VERSION}.tar && '
+        'cd samtools-{SAMTOOLS_VERSION} && ./configure --disable-lzma && make'
+
+BGZIP = 'downloads/htslib-' + HTSLIB_VERSION + '/bgzip'
+TABIX = 'downloads/htslib-' + HTSLIB_VERSION + '/tabix'
+rule install_htslib:
+    output:
+        BGZIP,
+        TABIX
+    params: N='install_htslib', threads=1
+    shell:
+        'mkdir -p downloads && cd downloads && wget {HTSLIB_DOWNLOAD_LINK} && '
+        'bzip2 -f -d htslib-{HTSLIB_VERSION}.tar.bz2 && '
+        'tar -xvf htslib-{HTSLIB_VERSION}.tar && '
+        'cd htslib-{HTSLIB_VERSION} && ./configure --disable-lzma && make'
+
+
+#GATK = 'downloads/gatk-' + GATK_VERSION + '/gatk-package-' + GATK_VERSION + '-local.jar'
+#rule install_gatk:
+#    output:
+#        GATK
+#    params: N='install_gatk', threads=1
+#    shell:
+#        'mkdir -p downloads && cd downloads && wget {GATK_DOWNLOAD_LINK} && '
+#        'unzip gatk-{GATK_VERSION}.zip'
+
+PICARD = 'downloads/picard.jar'
+rule install_picard:
+    output:
+        PICARD
+    params: N='install_picard', threads=1
+    shell:
+        'cd downloads && '
+        'wget {PICARD_DOWNLOAD_LINK}'
+
+BWA = 'downloads/bwa/bwa'
+rule install_bwa:
+    output:
+        BWA
+    params: N='install_bwa', threads=1
+    shell:
+        'cd downloads && '
+        'git clone {BWA_DOWNLOAD_LINK} && '
+        'cd bwa &&  make'
