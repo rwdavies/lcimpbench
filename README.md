@@ -7,13 +7,14 @@ Code to benchmark performance of low coverage imputation methods
 
 ```
 git clone https://github.com/rwdavies/lcimpbench.git
+cd lcimpbench
 . activate ## requires python3, java, R to be in path, as well as GATK and RESULTS_DIR set. this sets them for my environment
 ./scripts/check-dependencies.sh ## see example activate script
 ./scripts/install-snakemake.sh
 ./scripts/all-tests.sh # stub
 
 ## then
-./scripts/run.sh ## -j gives number of jobs, --dryrun shows tree. quote multiple options e.g. "-j 16 --dryrun" or "-j 16"
+./run.sh "-j 16" ## -j gives number of jobs. can do --dryrun as well to see options
 ```
 
 ## minimal todo
