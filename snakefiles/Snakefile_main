@@ -26,7 +26,7 @@ BWA_DOWNLOAD_LINK = 'https://github.com/lh3/bwa.git'
 ## possibly even better abstraction into scenarios
 SAMPLE_LIST = 'HGDP00775'
 ## THIS IS RUNNING INTO PROBLEMS ON EBI
-## HOST LOCAL COPY FOR NOW
+## consider hosting local copy if OK
 SAMPLE_DOWNLOAD_BAM = 'ftp://ftp.sra.ebi.ac.uk/vol1/ERZ312/ERZ312793/LP6005441-DNA_D05.srt.aln.bam'
 
 
