@@ -1,4 +1,0 @@
-GATK='/apps/well/gatk/3.7-0/GenomeAnalysisTK.jar'
-RESULTS_DIR='/well/myers/rwdavies/test-lcimpbench/'
-LCIMPBENCH_HOME_DIR='/users/flint/rwdavies/personal/proj/lcimpbench'
-R='/apps/well/R/3.3.1-openblas-0.2.18-omp-gcc5.4.0/bin/R'
