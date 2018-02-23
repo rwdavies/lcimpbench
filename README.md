@@ -13,7 +13,8 @@ cd lcimpbench
 ./scripts/install-snakemake.sh
 ./scripts/all-tests.sh # stub
 
-## then
+## to rebuild
+rm summary.txt 
 ./run.sh "-j 16" ## -j gives number of jobs. can do --dryrun as well to see options
 ```
 
