@@ -7,8 +7,7 @@ Code to benchmark performance of low coverage imputation methods
 
 ```
 git clone https://github.com/rwdavies/lcimpbench.git
-## requires python3, java, R to be in path, as well as GATK and RESULTS_DIR set
-## for example, see e.g. activate
+. activate ## requires python3, java, R to be in path, as well as GATK and RESULTS_DIR set. this sets them for my environment
 ./scripts/check-dependencies.sh ## see example activate script
 ./scripts/install-snakemake.sh
 ./scripts/all-tests.sh # stub
