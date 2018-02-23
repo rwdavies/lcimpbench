@@ -1,0 +1,5 @@
+export PATH=/apps/well/python/3.5.2-gcc5.4.0/bin/:${PATH}
+export PATH=/apps/well/java/jdk1.8.0_latest/bin/:${PATH}
+export PATH=/apps/well/R/3.3.1-openblas-0.2.18-omp-gcc5.4.0/bin/:${PATH}
+export RESULTS_DIR=/well/myers/rwdavies/test-lcimpbench/
+export GATK=/apps/well/gatk/3.7-0/GenomeAnalysisTK.jar
